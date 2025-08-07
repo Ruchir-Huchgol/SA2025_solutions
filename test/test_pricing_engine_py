@@ -1,0 +1,76 @@
+import pytest
+import numpy as np
+import pandas as pd
+from datetime import datetime
+
+from pricing.advanced_pricing_engine import AdvancedPricingEngine
+
+@pytest.fixture
+def engine():
+    return AdvancedPricingEngine(base_price=10)
+
+@pytest.fixture
+def sample_row():
+    class Row:
+        def __init__(self):
+            self.Occupancy = 80
+            self.Capacity = 100
+            self.QueueLength = 5
+            self.TrafficLevel = 60
+            self.IsSpecialDay = True
+            self.VehicleType = 'Car'
+            self.Hour = 9
+            self.CurrentPrice = 10
+    return Row()
+
+def test_linear_pricing(engine, sample_row):
+    price = engine.model_1_linear_pricing(
+        current_price=sample_row.CurrentPrice,
+        occupancy=sample_row.Occupancy,
+        capacity=sample_row.Capacity
+    )
+    assert 5 <= price <= 20  # Within allowed price bounds
+
+def test_demand_based_pricing(engine, sample_row):
+    price = engine.model_2_demand_based_pricing(
+        sample_row.Occupancy,
+        sample_row.Capacity,
+        sample_row.QueueLength,
+        sample_row.TrafficLevel,
+        sample_row.IsSpecialDay,
+        sample_row.VehicleType,
+        sample_row.Hour
+    )
+    assert price > 0
+    assert isinstance(price, float)
+
+def test_competitive_pricing(engine, sample_row):
+    competitor_prices = [8, 12, 10]
+    price = engine.model_3_competitive_pricing(
+        base_price=10,
+        competitor_prices=competitor_prices,
+        occupancy=sample_row.Occupancy,
+        capacity=sample_row.Capacity,
+        queue_length=sample_row.QueueLength
+    )
+    assert price >= 5 and price <= 25
+
+def test_time_factor(engine):
+    assert engine.get_time_factor(9) == 1.3  # peak_morning
+    assert engine.get_time_factor(18) == 1.4  # peak_evening
+    assert engine.get_time_factor(13) == 1.1  # business_hours
+    assert engine.get_time_factor(22) == 0.8  # off-peak
+
+def test_haversine_distance(engine):
+    dist = engine.haversine_distance(12.9716, 77.5946, 13.0827, 80.2707)  # Bangalore to Chennai
+    assert isinstance(dist, float)
+    assert dist > 0
+
+def test_calculate_all_prices(engine, sample_row):
+    prices = engine.calculate_all_prices(sample_row)
+    assert 'price_linear' in prices
+    assert 'price_demand' in prices
+    assert 'price_competitive' in prices
+    assert 'average_price' in prices
+    assert all(p > 0 for p in prices.values())
+
